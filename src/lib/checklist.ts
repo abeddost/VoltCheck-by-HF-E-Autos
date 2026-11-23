@@ -6,7 +6,8 @@
  * a `column` are also copied into that column of the `leads` table (used for lists and filters).
  */
 
-export type DriveType = "bev" | "phev" | "hev" | "ice";
+/** "ice" is the old generic combustion value, kept so older inspections still load. */
+export type DriveType = "bev" | "phev" | "hev" | "petrol" | "diesel" | "ice";
 export type CheckStatus = "ok" | "minor" | "major" | "na";
 
 export interface CheckValue {
@@ -105,10 +106,14 @@ export interface Section {
 // ---------------------------------------------------------------------------
 
 const drive = (data: InspectionData) => data.drive_type as DriveType | undefined;
-/** Battery-electric or plug-in hybrid, or not chosen yet (show EV checks by default). */
-const hasHvBattery: Condition = (d) => !drive(d) || drive(d) === "bev" || drive(d) === "phev";
-const hasEngine: Condition = (d) => drive(d) === "phev" || drive(d) === "hev" || drive(d) === "ice";
-const isElectrified: Condition = (d) => drive(d) !== "ice";
+const COMBUSTION: DriveType[] = ["petrol", "diesel", "ice"];
+export const isCombustion = (type: unknown) => COMBUSTION.includes(type as DriveType);
+/** Electric or any hybrid, or not chosen yet (show EV checks by default). */
+const hasHvBattery: Condition = (d) => !isCombustion(drive(d));
+/** Can be plugged in: electric or plug-in hybrid (or not chosen yet). */
+const isPlugIn: Condition = (d) => !drive(d) || drive(d) === "bev" || drive(d) === "phev";
+const hasEngine: Condition = (d) => drive(d) === "phev" || drive(d) === "hev" || isCombustion(drive(d));
+const isElectrified = hasHvBattery;
 
 const yesNo: Option[] = [
   { value: "yes", label: "Ja" },
@@ -154,15 +159,15 @@ export const SECTIONS: Section[] = [
     icon: "car",
     intro: "Fahrzeugdaten aus dem Fahrzeugschein (Teil I) übernehmen.",
     fields: [
-      { type: "select", key: "drive_type", label: "Antrieb", column: "drive_type", required: true, options: [
+      { type: "select", key: "drive_type", label: "Antrieb", column: "drive_type", required: true, requiredMessage: "Antrieb auswählen (Elektro, Hybrid, Benzin oder Diesel)", options: [
         { value: "bev", label: "Elektro (BEV)" },
         { value: "phev", label: "Plug-in-Hybrid" },
         { value: "hev", label: "Hybrid" },
-        { value: "ice", label: "Verbrenner" },
+        { value: "petrol", label: "Benzin" },
+        { value: "diesel", label: "Diesel" },
       ] },
       { type: "text", key: "vin", label: "FIN (Fahrgestellnummer)", column: "vin", uppercase: true, placeholder: "17 Zeichen", hint: "FIN oder Kennzeichen ist Pflicht." },
       { type: "text", key: "plate", label: "Kennzeichen", column: "plate", uppercase: true, placeholder: "M-AB 1234" },
-      photo("foto_fin", "Foto FIN (Typenschild oder Windschutzscheibe)", { required: true }),
       { type: "text", key: "make", label: "Marke", column: "make", suggestions: MAKES, required: true },
       { type: "text", key: "model", label: "Modell", column: "model", placeholder: "z. B. Model 3, ID.3, Ioniq 5", required: true },
       { type: "text", key: "variant", label: "Variante / Ausstattung", column: "variant", placeholder: "z. B. Long Range AWD" },
@@ -170,7 +175,7 @@ export const SECTIONS: Section[] = [
       { type: "number", key: "mileage", label: "Kilometerstand", unit: "km", column: "mileage", required: true },
       photo("foto_tacho", "Foto Kilometerstand", { required: true }),
       { type: "number", key: "power_kw", label: "Leistung", unit: "kW", column: "power_kw" },
-      { type: "number", key: "battery_capacity_kwh", label: "Batteriekapazität", unit: "kWh", decimal: true, column: "battery_capacity_kwh", showIf: hasHvBattery },
+      { type: "number", key: "battery_capacity_kwh", label: "Batteriekapazität", unit: "kWh", decimal: true, column: "battery_capacity_kwh", showIf: isPlugIn },
       { type: "text", key: "color", label: "Farbe", column: "color" },
       { type: "number", key: "previous_owners", label: "Anzahl Halter" },
       { type: "month", key: "hu_due", label: "HU / TÜV gültig bis" },
@@ -198,7 +203,6 @@ export const SECTIONS: Section[] = [
       { type: "number", key: "last_service_km", label: "km beim letzten Service", unit: "km" },
       { type: "select", key: "invoices", label: "Rechnungen vorhanden", options: yesNo },
       { type: "number", key: "keys_count", label: "Anzahl Schlüssel / Keycards" },
-      photo("foto_schluessel", "Foto Schlüssel", { required: true }),
       { type: "select", key: "import", label: "Importfahrzeug", options: yesNoUnknown },
       { type: "select", key: "accident_status", label: "Unfallstatus laut Verkäufer", options: [
         { value: "none", label: "Unfallfrei" },
@@ -225,9 +229,9 @@ export const SECTIONS: Section[] = [
         { value: "none", label: "Nicht gemessen" },
       ] },
       photo("foto_soh", "Batterie-Zertifikat / Messergebnis"),
-      { type: "number", key: "range_km", label: "Reichweite bei 100 %", unit: "km", column: "range_km" },
-      { type: "number", key: "charge_level", label: "Aktueller Ladestand", unit: "%" },
-      { type: "select", key: "battery_ownership", label: "Batterie", column: "battery_ownership", hint: "Bei älteren Renault ZOE / Kangoo oft Mietbatterie!", options: [
+      { type: "number", key: "range_km", label: "Reichweite bei 100 %", unit: "km", column: "range_km", showIf: isPlugIn },
+      { type: "number", key: "charge_level", label: "Aktueller Ladestand", unit: "%", showIf: isPlugIn },
+      { type: "select", key: "battery_ownership", label: "Batterie", column: "battery_ownership", showIf: isPlugIn, hint: "Bei älteren Renault ZOE / Kangoo oft Mietbatterie!", options: [
         { value: "owned", label: "Kaufbatterie" },
         { value: "rented", label: "Mietbatterie" },
         { value: "unknown", label: "Unbekannt" },
@@ -244,7 +248,7 @@ export const SECTIONS: Section[] = [
     key: "laden",
     title: "Laden",
     icon: "plug",
-    showIf: hasHvBattery,
+    showIf: isPlugIn,
     fields: [
       check("charge_port", "Ladebuchse & Ladeklappe"),
       check("ac_charging", "AC-Laden getestet (Wallbox / Typ 2)", { measures: [{ key: "kw", label: "kW", decimal: true }] }),
@@ -448,7 +452,7 @@ export const SECTIONS: Section[] = [
       photo("foto_seats_rear", "Rücksitze", { required: true }),
       photo("foto_trunk", "Kofferraum", { required: true }),
       photo("foto_frunk", "Frunk / Motorraum", { required: true }),
-      photo("foto_charge_port", "Ladeanschluss", { showIf: hasHvBattery, required: true }),
+      photo("foto_charge_port", "Ladeanschluss", { showIf: isPlugIn, required: true }),
       photo("foto_wheels", "Räder (alle vier)"),
       photo("foto_roof", "Dach"),
       photo("foto_more", "Weitere Fotos"),

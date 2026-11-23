@@ -13,7 +13,7 @@ export interface Lead {
   make: string | null;
   model: string | null;
   variant: string | null;
-  drive_type: "bev" | "phev" | "hev" | "ice" | null;
+  drive_type: "bev" | "phev" | "hev" | "petrol" | "diesel" | "ice" | null;
   first_registration: string | null;
   mileage: number | null;
   power_kw: number | null;
@@ -81,6 +81,8 @@ export const DRIVE_LABEL: Record<NonNullable<Lead["drive_type"]>, string> = {
   bev: "Elektro",
   phev: "Plug-in-Hybrid",
   hev: "Hybrid",
+  petrol: "Benzin",
+  diesel: "Diesel",
   ice: "Verbrenner",
 };
 

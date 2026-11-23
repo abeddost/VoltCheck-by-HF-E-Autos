@@ -43,7 +43,12 @@ export default function LeadPage({ params }: PageProps<"/admin/leads/[id]">) {
   );
 }
 
-const LABELS: Record<string, string> = Object.fromEntries(SECTIONS.flatMap((s) => s.fields.map((f) => [f.key, f.label])));
+const LABELS: Record<string, string> = {
+  // photo fields that were removed from the form, so older inspections keep readable labels
+  foto_fin: "Foto FIN",
+  foto_schluessel: "Foto Schlüssel",
+  ...Object.fromEntries(SECTIONS.flatMap((s) => s.fields.map((f) => [f.key, f.label]))),
+};
 
 function toGrid(photos: PhotoView[]): GridPhoto[] {
   return photos.map((p) => ({ id: p.id, url: p.url, thumbUrl: p.thumbUrl, label: LABELS[p.field_key] ?? p.field_key }));
@@ -101,7 +106,7 @@ async function LeadDetail({ params }: { params: Promise<{ id: string }> }) {
     ["HU bis", monthYear(data.hu_due)],
     ["FIN", lead.vin ?? "–"],
   ];
-  if (lead.drive_type !== "ice" && lead.drive_type !== "hev") {
+  if (!lead.drive_type || lead.drive_type === "bev" || lead.drive_type === "phev") {
     facts.push(
       ["Batterie", lead.battery_capacity_kwh ? `${num(lead.battery_capacity_kwh)} kWh` : "–"],
       ["Reichweite 100 %", lead.range_km ? `${lead.range_km} km` : "–"],

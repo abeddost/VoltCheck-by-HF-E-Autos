@@ -42,6 +42,7 @@ import {
   validate,
   visibleFields,
   visibleSections,
+  type Issue,
 } from "@/lib/evaluate";
 import { cn, date, eur } from "@/lib/format";
 import { uid } from "@/lib/image";
@@ -115,6 +116,8 @@ export default function InspectionForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleting, startDelete] = useTransition();
+  /** section where "Weiter" was refused because required fields are missing */
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   const dataRef = useRef(initial.data);
   const dirtyRef = useRef(initial.dirty);
@@ -238,12 +241,25 @@ export default function InspectionForm({
   // ---------------------------------------------------------------- navigation
   function go(key: string) {
     setActive(key);
+    setBlocked(null);
     try {
       localStorage.setItem(sectionStoreKey, key);
     } catch {
       // ignore
     }
     window.scrollTo({ top: 0 });
+  }
+
+  /** Forward navigation only once every earlier section has its required fields. Going back is always allowed. */
+  function tryGo(key: string) {
+    const target = sections.findIndex((s) => s.key === key);
+    if (readOnly || target <= index) return go(key);
+    const stop = sections.slice(0, target).find((s) => navErrors.some((e) => e.sectionKey === s.key));
+    if (!stop) return go(key);
+    if (stop.key !== current.key) go(stop.key);
+    else window.scrollTo({ top: 0, behavior: "smooth" });
+    setBlocked(stop.key);
+    navigator.vibrate?.(60);
   }
 
   // ---------------------------------------------------------------- signature
@@ -264,6 +280,10 @@ export default function InspectionForm({
 
   // ---------------------------------------------------------------- submit
   const { errors, warnings } = validate(data, donePhotos);
+  // for page-to-page navigation a photo that is still uploading already counts
+  const navErrors = validate(data, photoManager.items.filter((p) => p.state !== "error")).errors;
+  const blockingIssues = !readOnly && blocked === current.key ? navErrors.filter((e) => e.sectionKey === current.key) : [];
+  const invalidFields = new Set(blockingIssues.flatMap((e) => e.fields ?? []));
 
   async function submit() {
     if (uploading) {
@@ -351,7 +371,7 @@ export default function InspectionForm({
                     chipRefs.current[section.key] = el;
                   }}
                   type="button"
-                  onClick={() => go(section.key)}
+                  onClick={() => tryGo(section.key)}
                   className={cn(
                     "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors",
                     isActive ? "bg-navy-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
@@ -415,13 +435,21 @@ export default function InspectionForm({
 
           {current.intro ? <p className="mb-5 rounded-2xl bg-white p-3.5 text-sm text-slate-600 ring-1 ring-slate-200/80">{current.intro}</p> : null}
 
-          {current.key === "fotos" ? <MissingPhotos errors={errors} onGo={go} current={current.key} /> : null}
+          {blockingIssues.length > 0 ? <BlockedBanner issues={blockingIssues} /> : null}
+          {current.key === "fotos" && blockingIssues.length === 0 ? <MissingPhotos errors={errors} onGo={go} current={current.key} /> : null}
           {current.key === "abschluss" ? <Summary data={data} /> : null}
 
           <div className="space-y-4">
-            {visibleFields(current, data).map((field) => (
-              <FieldView key={field.key} field={field} />
-            ))}
+            {visibleFields(current, data).map((field) =>
+              invalidFields.has(field.key) ? (
+                <div key={field.key} id={`field-${field.key}`} className="scroll-mt-40 rounded-2xl ring-2 ring-rose-500 ring-offset-4 ring-offset-slate-50">
+                  <FieldView field={field} />
+                  <p className="mt-2 px-1 pb-1 text-sm font-semibold text-rose-600">Pflichtfeld – bitte ausfüllen</p>
+                </div>
+              ) : (
+                <FieldView key={field.key} field={field} />
+              ),
+            )}
           </div>
 
           {current.key === "abschluss" && !readOnly ? (
@@ -467,7 +495,7 @@ export default function InspectionForm({
               Zurück
             </Button>
             {index < sections.length - 1 ? (
-              <Button size="lg" onClick={() => go(sections[index + 1].key)} className="min-w-0 flex-[2]">
+              <Button size="lg" onClick={() => tryGo(sections[index + 1].key)} className="min-w-0 flex-[2]">
                 <span className="sm:hidden">Weiter</span>
                 <span className="hidden truncate sm:inline">{sections[index + 1].title}</span>
                 <ChevronRight className="size-5 shrink-0" />
@@ -511,6 +539,32 @@ function SaveIndicator({ state }: { state: SaveState }) {
     <div className={cn("flex shrink-0 items-center gap-1.5 text-xs font-semibold", s.className)} aria-live="polite">
       {s.icon}
       <span className="hidden sm:inline">{s.text}</span>
+    </div>
+  );
+}
+
+function BlockedBanner({ issues }: { issues: Issue[] }) {
+  function focus(issue: Issue) {
+    const key = issue.fields?.[0];
+    if (key) document.getElementById(`field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  return (
+    <div role="alert" className="mb-5 flex items-start gap-3 rounded-2xl bg-rose-50 p-4 ring-1 ring-rose-300">
+      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-600" />
+      <div className="min-w-0">
+        <p className="font-bold text-rose-800">Fast geschafft – bitte noch {issues.length === 1 ? "diese Angabe" : `diese ${issues.length} Angaben`} ergänzen</p>
+        <p className="mt-0.5 text-sm text-rose-700">Erst wenn alle Pflichtfelder (*) ausgefüllt sind, geht es weiter.</p>
+        <ul className="mt-2 space-y-1">
+          {issues.map((issue) => (
+            <li key={issue.message}>
+              <button type="button" onClick={() => focus(issue)} className="flex items-start gap-2 text-left text-sm font-semibold text-rose-900 underline-offset-2 hover:underline">
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-rose-600" />
+                {issue.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

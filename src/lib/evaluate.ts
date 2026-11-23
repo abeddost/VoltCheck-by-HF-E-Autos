@@ -88,6 +88,8 @@ export function repairTotal(data: InspectionData) {
 export interface Issue {
   sectionKey: string;
   message: string;
+  /** form fields this issue points at (highlighted in the form) */
+  fields?: string[];
 }
 
 export function validate(data: InspectionData, photos: PhotoRef[]) {
@@ -95,7 +97,7 @@ export function validate(data: InspectionData, photos: PhotoRef[]) {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
 
-  if (isEmpty(data.vin) && isEmpty(data.plate)) errors.push({ sectionKey: "fahrzeug", message: "FIN oder Kennzeichen fehlt" });
+  if (isEmpty(data.vin) && isEmpty(data.plate)) errors.push({ sectionKey: "fahrzeug", message: "FIN oder Kennzeichen fehlt", fields: ["vin", "plate"] });
 
   for (const section of visibleSections(data)) {
     let unchecked = 0;
@@ -110,9 +112,9 @@ export function validate(data: InspectionData, photos: PhotoRef[]) {
       }
       if (!field.required) continue;
       if (field.type === "photo") {
-        if (!(counts[field.key] > 0)) errors.push({ sectionKey: section.key, message: `Foto fehlt: ${field.label}` });
+        if (!(counts[field.key] > 0)) errors.push({ sectionKey: section.key, message: `Foto fehlt: ${field.label}`, fields: [field.key] });
       } else if (isEmpty(data[field.key])) {
-        errors.push({ sectionKey: section.key, message: field.requiredMessage ?? `${field.label} fehlt` });
+        errors.push({ sectionKey: section.key, message: field.requiredMessage ?? `${field.label} fehlt`, fields: [field.key] });
       }
     }
     if (unchecked > 0) {
