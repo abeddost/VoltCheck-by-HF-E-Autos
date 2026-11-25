@@ -1,4 +1,3 @@
-import DesignerCredit from "@/components/designer-credit";
 import type { Metadata } from "next";
 import { Logo } from "@/components/logo";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -30,9 +29,6 @@ export default function LoginPage() {
           )}
         </div>
         <p className="mt-6 text-center text-xs text-slate-400">Kein Konto? Der Admin legt Zugänge im Bereich „Team“ an.</p>
-        <div className="mt-8 flex justify-center text-slate-400">
-          <DesignerCredit site="voltcheck" />
-        </div>
       </div>
     </main>
   );
